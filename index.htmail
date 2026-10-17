@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Европа XVIII века: Великий Квест RPG 3D</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background-color: #0c0805; font-family: 'Georgia', serif; display: flex; justify-content: center; align-items: center; }
+        #game-view-wrapper { position: relative; width: 800px; height: 600px; box-shadow: 0 0 60px rgba(0,0,0,0.95); border: 4px solid #5c3a21; border-radius: 8px; }
+        canvas { background-color: #a4b3cc; display: block; }
+        #ui-parchment { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 500px; background: #f7f1da; color: #26170c; padding: 25px; border-radius: 6px; border: 12px double #4a321a; box-shadow: 0 25px 70px rgba(0,0,0,0.9); text-align: center; display: none; z-index: 500; background-image: radial-gradient(circle, #faf6eb 60%, #e6d4aa 100%); }
+        .scroll-title { font-size: 22px; font-weight: bold; color: #4a2f13; margin-bottom: 12px; border-bottom: 3px double #8d6e63; padding-bottom: 8px; text-transform: uppercase; }
+        .scroll-text { font-size: 14px; line-height: 1.5; text-align: justify; margin-bottom: 15px; color: #3e2723; }
+        .quiz-container { background: rgba(141, 110, 99, 0.08); padding: 12px; border-radius: 8px; border: 2px dashed #a1887f; margin-bottom: 15px; }
+        .quiz-question { font-size: 15px; font-weight: bold; margin-bottom: 10px; color: #5d4037; }
+        .choice-btn { display: block; width: 100%; background: #9c7853; color: #fffcf5; border: 2px solid #5c3a21; padding: 10px; margin: 6px 0; cursor: pointer; font-size: 14px; font-weight: bold; border-radius: 4px; text-align: left; }
+        .choice-btn:hover { background: #5c3a21; color: #ffffff; transform: translateX(5px); }
+        .close-btn { background: #c62828; color: white; border: 2px solid #7f0000; padding: 8px 20px; font-size: 13px; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        #hud-dashboard { position: absolute; top: 15px; left: 15px; background: rgba(28, 18, 10, 0.94); color: #fceade; padding: 12px; border-radius: 8px; border: 2px solid #9c7853; z-index: 100; width: 280px; pointer-events: none; }
+        .hud-header { font-size: 13px; color: #ffb74d; font-weight: bold; border-bottom: 2px solid #9c7853; padding-bottom: 4px; margin-bottom: 8px; text-align: center; }
+        .journal-item { font-size: 12px; margin: 5px 0; display: flex; justify-content: space-between; align-items: center; }
+        .status-done { background: #2e7d32; color: #fff; padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: bold; }
+        .status-todo { background: #c62828; color: #fff; padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: bold; }
+        .stats-counter { margin-top: 8px; padding-top: 6px; border-top: 1px dashed #5c3a21; font-size: 11px; color: #ffe0b2; display: flex; justify-content: space-between; }
+        #victory-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 6, 3, 0.97); z-index: 999; display: none; flex-direction: column; justify-content: center; align-items: center; color: #f7f1da; }
+    </style>
+</head>
+<body>
+    <div id="game-view-wrapper">
+        <div id="hud-dashboard">
+            <div class="hud-header">📜 ХРОНИКИ НАУКИ: XVIII ВЕК</div>
+            <div id="j-newton" class="journal-item"><span>1. Спектр Исаака Ньютона</span><span class="status-todo">В поиске</span></div>
+            <div id="j-franklin" class="journal-item"><span>2. Змей Б. Франклина</span><span class="status-todo">В поиске</span></div>
+            <div id="j-montgolfier" class="journal-item"><span>3. Шар братьев Монгольфье</span><span class="status-todo">В поиске</span></div>
+            <div id="j-lavoisier" class="journal-item"><span>4. Кислород А. Лавуазье</span><span class="status-todo">В поиске</span></div>
+            <div class="stats-counter"><span>Шаги: <strong id="step-count">0</strong></span><span>Погода: <strong style="color:#64b5f6;">Ясно</strong></span></div>
+        </div>
+        <canvas id="mainGameCanvas" width="800" height="600"></canvas>
+        <div id="ui-parchment">
+            <div id="s-title" class="scroll-title">Станция</div>
+            <div id="s-text" class="scroll-text">Описание...</div>
+            <div class="quiz-container">
+                <div id="s-question" class="quiz-question">Вопрос...</div>
+                <div id="s-choices"></div>
+            </div>
+            <button class="close-btn" onclick="closeParchmentUI()">Вернуться в город ❌</button>
+        </div>
+        <div id="victory-screen">
+            <h1 style="color:#ffca28; margin-bottom:15px;">📜 ЭПОХА ПРОСВЕЩЕНИЯ ПОКОРЕНА!</h1>
+            <p style="font-size:16px; text-align:center; color:#e0d4be; max-width:500px;">Вы задокументировали все величайшие открытия XVIII века. Проект готов!</p>
+            <button class="choice-btn" style="width:auto; padding:10px 30px; margin-top:20px;" onclick="location.reload()">Начать заново 🔄</button>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('mainGameCanvas'), ctx = canvas.getContext('2d'), parchment = document.getElementById('ui-parchment');
+        const player = { worldX: 1500, worldY: 1500, speed: 5.5, animFrame: 0, steps: 0, isMoving: false }, worldSize = 3200, keys = {};
+        const quests = { newton: false, franklin: false, montgolfier: false, lavoisier: false };
+        const worldObjects = [], citizens = [], particles = [], smokeParticles = [];
+        const scienceStations = [
+            { id: 'newton', worldX: 850, worldY: 850, color: '#2e7d32', radius: 65, title: '🏛️ Оптика Ньютона', info: 'В начале XVIII века Ньютон пропустил луч солнца через стеклянную призму, доказав, что белый свет распадается на спектр цветов радуги.', question: 'Какое физическое явление открыл Ньютон, разложив белый свет?', choices: ['Дифракция электронов', 'Дисперсия света (преломление)', 'Люминесценция газов'], correct: 1 },
+            { id: 'franklin', worldX: 2350, worldY: 850, color: '#1565c0', radius: 65, title: '⚡ Молния Франклина', info: 'В 1752 году Франклин запустил воздушного змея в грозу, доказал электрическую природу молний и изобрёл громоотвод.', question: 'Какое защитное устройство Франклин создал на основе этого опыта?', choices: ['Громоотвод', 'Предохранитель', 'Трансформатор'], correct: 0 },
+            { id: 'montgolfier', worldX: 850, worldY: 2350, color: '#ef6c00', radius: 65, title: '🎈 Шар братьев Монгольфье', info: 'В 1783 году во Франции братья Монгольфье подняли в воздух первый тепловой аэростат, надутый горячим дымом и воздухом.', question: 'За счёт какого принципа взлетал шар братьев Монгольфье?', choices: ['Сжатый гелий внутри', 'Разность плотности холодного и горячего воздуха', 'Водородный двигатель'], correct: 1 },
+            { id: 'lavoisier', worldX: 2350, worldY: 2350, color: '#c2185b', radius: 65, title: '🧪 Химия Лавуазье', info: 'Лавуазье доказал закон сохранения массы, выделил кислород и полностью опроверг старинную мифическую теорию горения флогистона.', question: 'Какую ложную теорию горения Лавуазье стёр из науки своими опытами?', choices: ['Концепцию флогистона', 'Учение об алхимическом эфире', 'Теорию кварков теплорода'], correct: 0 }
+        ];
+        function createWaterSpray(x, y) { particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 3 - 2, size: Math.random() * 2 + 1, alpha: 1 }); }
+        function createSmoke(wx, wy, wz) { smokeParticles.push({ worldX: wx, worldY: wy, worldZ: wz, vx: (Math.random() - 0.3) * 0.3, vy: (Math.random() - 0.5) * 0.2, vz: Math.random() * 0.4 + 0.4, size: Math.random() * 3 + 2, alpha: 0.5 }); }
+        function generateHistoricCity() {
+            worldObjects.push({ type: 'fountain', worldX: 1600, worldY: 1600, size: 50, height: 16, sortY: 1600 });
+            for(let a = 0; a < Math.PI * 2; a += Math.PI / 4) { worldObjects.push({ type: 'lamp', worldX: 1600 + Math.sin(a) * 320, worldY: 1600 + Math.cos(a) * 320, sortY: 1600 + Math.cos(a) * 320 }); }
+            worldObjects.push({ type: 'cathedral', worldX: 1500, worldY: 1200, w: 180, h: 180, d: 130, wallColor: '#cfd8dc', roofColor: '#263238', sortY: 1330 });
+            for(let r = 0; r < 3; r++) {
+                for(let c = 0; c < 3; c++) {
+                    worldObjects.push({ type: 'house', worldX: 520+c*180, worldY: 520+r*170, w: 90, h: 80, d: 80, wallColor: '#d7ccc8', roofColor: '#5d4037', sortY: 600+r*170 });
+                    worldObjects.push({ type: 'house', worldX: 2120+c*180, worldY: 520+r*170, w: 90, h: 85, d: 80, wallColor: '#eceff1', roofColor: '#37474f', sortY: 600+r*170 });
+                    worldObjects.push({ type: 'house', worldX: 520+c*180, worldY: 2020+r*170, w: 90, h: 90, d: 80, wallColor: '#f5f5f5', roofColor: '#4e342e', sortY: 2100+r*170 });
+                    worldObjects.push({ type: 'house', worldX: 2120+c*180, worldY: 2020+r*170, w: 90, h: 80, d: 80, wallColor: '#e0d0c0', roofColor: '#78350f', sortY: 2100+r*170 });
+                }
+            }
+            for(let i = 0; i < 45; i++) {
+                let tx = 400 + Math.random() * 2400, ty = 400 + Math.random() * 2400;
+                if(Math.sqrt(Math.pow(tx-1600,2) + Math.pow(ty-1600,2)) > 200) worldObjects.push({ type: 'tree', worldX: tx, worldY: ty, size: 22, height: 55, sortY: ty });
+            }
+            for(let i = 0; i < 15; i++) citizens.push({ worldX: 900 + Math.random() * 1400, worldY: 900 + Math.random() * 1400, speed: 1.4, angle: Math.random() * Math.PI * 2, color: '#5d4037', changeTimer: 50 });
+        }
+        generateHistoricCity();
+        window.addEventListener('keydown', e => { keys[e.code] = true; keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', e => { keys[e.code] = false; keys[e.key.toLowerCase()] = false; });
+        function toIsometric(wX, wY, wZ = 0) {
+            let relX = wX - player.worldX, relY = wY - player.worldY;
+            return { x: 400 + (relX - relY) * 0.866, y: 300 + (relX + relY) * 0.5 - wZ + 80 };
+        }
+                function render3DHouse(h) {
+            let base = toIsometric(h.worldX, h.worldY), left = toIsometric(h.worldX, h.worldY + h.d), right = toIsometric(h.worldX + h.w, h.worldY), back = toIsometric(h.worldX + h.w, h.worldY + h.d);
+            let tBase = toIsometric(h.worldX, h.worldY, h.height), tLeft = toIsometric(h.worldX, h.worldY + h.d, h.height), tRight = toIsometric(h.worldX + h.w, h.worldY, h.height), tBack = toIsometric(h.worldX + h.w, h.worldY + h.d, h.height);
+            if(Math.random() < 0.02) createSmoke(h.worldX + 20, h.worldY + 20, h.height + 15);
+
+            ctx.fillStyle = 'rgba(26, 15, 7, 0.25)';
+            ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(left.x, left.y); ctx.lineTo(back.x, back.y); ctx.lineTo(right.x, right.y); ctx.closePath(); ctx.fill();
+
+            ctx.fillStyle = h.wallColor;
+            ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(left.x, left.y); ctx.lineTo(tLeft.x, tLeft.y); ctx.lineTo(tBase.x, tBase.y); ctx.closePath(); ctx.fill(); ctx.stroke();
+            
+            ctx.strokeStyle = 'rgba(0,0,0,0.08)'; ctx.lineWidth = 1;
+            for(let yL = tBase.y + 6; yL < base.y; yL += 10) {
+                ctx.beginPath(); ctx.moveTo(left.x, yL + (left.y-base.y)/2); ctx.lineTo(base.x, yL); ctx.stroke();
+            }
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+
+            ctx.fillStyle = '#fffde7';
+            let wx1 = left.x + (base.x-left.x)*0.3 - 6, wy1 = tLeft.y + (base.y-left.y)*0.4;
+            let wx2 = left.x + (base.x-left.x)*0.7 - 6;
+            ctx.fillRect(wx1, wy1, 12, 18); ctx.strokeRect(wx1, wy1, 12, 18);
+            ctx.fillRect(wx2, wy1, 12, 18); ctx.strokeRect(wx2, wy1, 12, 18);
+            
+            ctx.strokeStyle = '#5c3a21'; ctx.beginPath(); ctx.moveTo(wx1+6, wy1); ctx.lineTo(wx1+6, wy1+18); ctx.moveTo(wx1, wy1+9); ctx.lineTo(wx1+12, wy1+9); ctx.moveTo(wx2+6, wy1); ctx.lineTo(wx2+6, wy1+18); ctx.moveTo(wx2, wy1+9); ctx.lineTo(wx2+12, wy1+9); ctx.stroke(); ctx.strokeStyle = '#000';
+
+            ctx.fillStyle = '#4e342e';
+            ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(right.x, right.y); ctx.lineTo(tRight.x, tRight.y); ctx.lineTo(tBase.x, tBase.y); ctx.closePath(); ctx.fill(); ctx.stroke();
+            
+            ctx.fillStyle = '#211003';
+            ctx.fillRect(base.x + (right.x-base.x)*0.5 - 9, base.y - 28, 18, 28);
+            ctx.strokeRect(base.x + (right.x-base.x)*0.5 - 9, base.y - 28, 18, 28);
+
+            let apex = toIsometric(h.worldX + h.w/2, h.worldY + h.d/2, h.height + 40);
+            ctx.fillStyle = h.roofColor;
+            ctx.beginPath(); ctx.moveTo(tBase.x, tBase.y); ctx.lineTo(tLeft.x, tLeft.y); ctx.lineTo(apex.x, apex.y); ctx.closePath(); ctx.fill(); ctx.stroke();
+            
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            for(let i=1; i<=4; i++) {
+                ctx.beginPath(); ctx.moveTo(tBase.x + (tLeft.x-tBase.x)*i/5, tBase.y + (tLeft.y-tBase.y)*i/5); ctx.lineTo(apex.x + (tLeft.x-apex.x)*i/5, apex.y + (tLeft.y-apex.y)*i/5); ctx.stroke();
+            }
+            ctx.strokeStyle = '#000';
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+            ctx.beginPath(); ctx.moveTo(tBase.x, tBase.y); ctx.lineTo(tRight.x, tRight.y); ctx.lineTo(apex.x, apex.y); ctx.closePath(); ctx.fill(); ctx.stroke();
+        }
+
+        function updateGame() {
+            if (parchment.style.display === 'block') return;
+            let mx = 0, my = 0;
+            if (keys['KeyW'] || keys['w'] || keys['ArrowUp']) { my = -1; mx = -1; }
+            if (keys['KeyS'] || keys['s'] || keys['ArrowDown']) { my = 1; mx = 1; }
+            if (keys['KeyA'] || keys['a'] || keys['ArrowLeft']) { mx = -1; my = 1; }
+            if (keys['KeyD'] || keys['d'] || keys['ArrowRight']) { mx = 1; my = -1; }
+            if(mx !== 0 || my !== 0) {
+                player.isMoving = true; player.animFrame += 0.2;
+                player.worldX += mx * player.speed * 0.707; player.worldY += my * player.speed * 0.707;
+                if(Math.floor(player.animFrame) % 5 === 0) { player.steps++; document.getElementById('step-count').innerText = player.steps; }
+            } else { player.isMoving = false; }
+            player.worldX = Math.max(450, Math.min(worldSize - 450, player.worldX));
+            player.worldY = Math.max(450, Math.min(worldSize - 450, player.worldY));
+            let fScr = toIsometric(1600, 1600, 16); if(Math.random() < 0.5) createWaterSpray(fScr.x, fScr.y);
+            for(let i=particles.length-1; i>=0; i--) { particles[i].x += particles[i].vx; particles[i].y += particles[i].vy; particles[i].vy += 0.12; particles[i].alpha -= 0.02; if(particles[i].alpha <= 0) particles.splice(i, 1); }
+            for(let i=smokeParticles.length-1; i>=0; i--) { smokeParticles[i].worldX += smokeParticles[i].vx; smokeParticles[i].worldY += smokeParticles[i].vy; smokeParticles[i].worldZ += smokeParticles[i].vz; smokeParticles[i].alpha -= 0.005; if(smokeParticles[i].alpha <= 0) smokeParticles.splice(i, 1); }
+            citizens.forEach(c => { c.changeTimer--; if(c.changeTimer <= 0) { c.angle = Math.random()*Math.PI*2; c.changeTimer = 60; } c.worldX += Math.cos(c.angle)*c.speed; c.worldY += Math.sin(c.angle)*c.speed; });
+            scienceStations.forEach(st => { if(Math.sqrt(Math.pow(player.worldX - st.worldX, 2) + Math.pow(player.worldY - st.worldY, 2)) < st.radius) openParchmentUI(st); });
+        }
+                function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let sky = ctx.createLinearGradient(0, 0, 0, canvas.height); sky.addColorStop(0, '#1a2a6c'); sky.addColorStop(0.5, '#b21f1f'); sky.addColorStop(1, '#fdbb2d'); ctx.fillStyle = sky; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#cca474'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = 'rgba(238, 223, 196, 0.2)';
+            for(let x = 400; x <= 2800; x += 60) { let p1 = toIsometric(x, 400), p2 = toIsometric(x, 2800); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); }
+            for(let y = 400; y <= 2800; y += 60) { let p1 = toIsometric(400, y), p2 = toIsometric(2800, y); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); }
+            ctx.strokeStyle = '#000';
+
+            let fCenter = toIsometric(1600, 1600);
+            ctx.fillStyle = '#9e846b'; ctx.beginPath(); ctx.arc(fCenter.x, fCenter.y, 80, 0, Math.PI*2); ctx.fill();
+
+            scienceStations.forEach(st => { let b = toIsometric(st.worldX, st.worldY); let ray = ctx.createLinearGradient(b.x, b.y, b.x, b.y - 350); ray.addColorStop(0, st.color); ray.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = ray; ctx.fillRect(b.x - 25, b.y - 350, 50, 350); });
+            const queue = [];
+            worldObjects.forEach(o => queue.push({ type: o.type, ref: o, sortY: o.sortY }));
+            smokeParticles.forEach(sp => queue.push({ type: 'smoke', ref: sp, sortY: sp.worldY }));
+            citizens.forEach(c => queue.push({ type: 'citizen', ref: c, sortY: c.worldY }));
+            queue.push({ type: 'player', ref: player, sortY: player.worldY });
+            queue.sort((a, b) => a.sortY - b.sortY);
+            queue.forEach(node => {
+                if(node.type === 'house' || node.type === 'cathedral') render3DHouse(node.ref);
+                if(node.type === 'tree') render3DTree(node.ref);
+                if(node.type === 'lamp') render3DLamp(node.ref);
+                if(node.type === 'fountain') { let scr = toIsometric(node.ref.worldX, node.ref.worldY); ctx.fillStyle = '#4e4e4e'; ctx.beginPath(); ctx.arc(scr.x, scr.y, node.ref.size, 0, Math.PI*2); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#0288d1'; ctx.beginPath(); ctx.arc(scr.x, scr.y, node.ref.size - 6, 0, Math.PI*2); ctx.fill(); }
+                if(node.type === 'smoke') { let sPos = toIsometric(node.ref.worldX, node.ref.worldY, node.ref.worldZ); ctx.fillStyle = 'rgba(240,240,240,' + node.ref.alpha + ')'; ctx.beginPath(); ctx.arc(sPos.x, sPos.y, node.ref.size, 0, Math.PI*2); ctx.fill(); }
+                if(node.type === 'citizen') { let cPos = toIsometric(node.ref.worldX, node.ref.worldY); ctx.fillStyle = '#4e342e'; ctx.fillRect(cPos.x - 6, cPos.y - 20, 12, 20); ctx.fillStyle = '#ffcc80'; ctx.beginPath(); ctx.arc(cPos.x, cPos.y - 24, 4, 0, Math.PI*2); ctx.fill(); }
+                if(node.type === 'player') {
+                    let px = 400, py = 300, osc = player.isMoving ? Math.sin(player.animFrame) * 2 : 0;
+                    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.arc(px, py + 12, 12, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#0288d1'; ctx.fillRect(px - 10, py - 20 + osc, 20, 32); ctx.strokeRect(px - 10, py - 20 + osc, 20, 32);
+                    ctx.fillStyle = '#fff'; ctx.fillRect(px - 3, py - 20 + osc, 6, 10);
+                    ctx.fillStyle = '#ffcc80'; ctx.beginPath(); ctx.arc(px, py - 28 + osc, 8, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                    ctx.fillStyle = '#111111'; ctx.beginPath(); ctx.moveTo(px - 16, py - 34 + osc); ctx.lineTo(px + 16, py - 34 + osc); ctx.lineTo(px, py - 46 + osc); ctx.closePath(); ctx.fill(); ctx.stroke();
+                }
+            });
+            particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.alpha; ctx.fillRect(p.x, p.y, p.size, p.size); }); ctx.globalAlpha = 1.0;
+            let radarSize = 100, rx = canvas.width - radarSize - 15, ry = 15; ctx.fillStyle = 'rgba(28,18,10,0.9)'; ctx.fillRect(rx, ry, radarSize, radarSize); ctx.strokeStyle = '#9c7853'; ctx.strokeRect(rx, ry, radarSize, radarSize);
+            scienceStations.forEach(st => { ctx.fillStyle = st.color; ctx.beginPath(); ctx.arc(rx + st.worldX * (radarSize/worldSize), ry + st.worldY * (radarSize/worldSize), 4, 0, Math.PI*2); ctx.fill(); });
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(rx + player.worldX * (radarSize/worldSize), ry + player.worldY * (radarSize/worldSize), 3, 0, Math.PI*2); ctx.fill();
+        }
+
+            });
+            particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.alpha; ctx.fillRect(p.x, p.y, p.size, p.size); }); ctx.globalAlpha = 1.0;
+            let radarSize = 100, rx = canvas.width - radarSize - 15, ry = 15; ctx.fillStyle = 'rgba(28,18,10,0.9)'; ctx.fillRect(rx, ry, radarSize, radarSize); ctx.strokeStyle = '#9c7853'; ctx.strokeRect(rx, ry, radarSize, radarSize);
+            scienceStations.forEach(st => { ctx.fillStyle = st.color; ctx.beginPath(); ctx.arc(rx + st.worldX * (radarSize/worldSize), ry + st.worldY * (radarSize/worldSize), 4, 0, Math.PI*2); ctx.fill(); });
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(rx + player.worldX * (radarSize/worldSize), ry + player.worldY * (radarSize/worldSize), 3, 0, Math.PI*2); ctx.fill();
+        }
+        function openParchmentUI(st) {
+            for(let k in keys) keys[k] = false;
+            document.getElementById('s-title').innerText = st.title; document.getElementById('s-text').innerText = st.info; document.getElementById('s-question').innerText = "Испытание: " + st.question;
+            const box = document.getElementById('s-choices'); box.innerHTML = '';
+            st.choices.forEach((choice, idx) => { const btn = document.createElement('button'); btn.className = 'choice-btn'; btn.innerText = choice; btn.onclick = () => verifyAnswer(st.id, idx, st.correct); box.appendChild(btn); });
+            parchment.style.display = 'block';
+        }
+        function verifyAnswer(id, selected, correct) {
+            if(selected === correct) {
+                alert("🎉 Правильно!"); quests[id] = true;
+                document.getElementById('j-' + id).innerHTML = '<span>' + id.toUpperCase() + '</span><span class="status-done">Изучено ✓</span>';
+                closeParchmentUI();
+                if(quests.newton && quests.franklin && quests.montgolfier && quests.lavoisier) document.getElementById('victory-screen').style.display = 'flex';
+            } else { alert("❌ Неверно! Попробуйте ещё раз."); }
+        }
+        function closeParchmentUI() { parchment.style.display = 'none'; player.worldX = 1600; player.worldY = 1600; }
+        function gameLoop() { updateGame(); drawGame(); requestAnimationFrame(gameLoop); }
+        gameLoop();
+    </script>
+</body>
+</html>
